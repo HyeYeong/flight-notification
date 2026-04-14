@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "chat:local": "node scripts/localChat.js",
     "check:local": "NODE_ENV=local node scripts/checkFlight.js",
     "check:prod": "NODE_ENV=production node scripts/checkFlight.js"
   },
@@ -12,8 +13,11 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@line/bot-sdk": "^11.0.0",
     "axios": "^1.13.6",
-    "dotenv": "^17.3.1"
+    "dotenv": "^17.3.1",
+    "mongodb": "^7.1.1",
+    "mongoose": "^9.4.1"
   },
   "type": "module"
 }
