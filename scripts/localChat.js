@@ -1,9 +1,7 @@
 import dotenv from "dotenv";
 import * as readline from "readline";
 import { connectDB } from "../models/db.js";
-import { UserState } from "../models/UserState.js";
-import { FlightAlert } from "../models/FlightAlert.js";
-import { t, COMMANDS, checkCmd } from "../utils/messages.js";
+import { processUserMessage } from "../controllers/chatController.js";
 
 dotenv.config({ path: ".env.local" });
 
@@ -21,122 +19,24 @@ async function replyMessage(text) {
 }
 
 async function handleMessage(userText) {
-  let user = await UserState.findOne({ lineUserId: MOCK_LINE_USER_ID });
-  if (!user) {
-    user = await UserState.create({ lineUserId: MOCK_LINE_USER_ID });
-  }
-
-  const text = userText.trim();
-  const lang = user.language || 'ko';
-
-  if (checkCmd(text, COMMANDS.CANCEL)) {
-    user.step = 0;
-    user.tempData = {};
-    await user.save();
-    return replyMessage(t(lang, 'cancel'));
-  }
-
-  if (checkCmd(text, COMMANDS.LANG_KO)) {
-    user.language = "ko";
-    user.currency = "KRW";
-    await user.save();
-    return replyMessage(t('ko', 'change_lang_ko'));
-  }
-
-  if (checkCmd(text, COMMANDS.LANG_JA)) {
-    user.language = "ja";
-    user.currency = "JPY";
-    await user.save();
-    return replyMessage(t('ja', 'change_lang_ja'));
-  }
-
-  if (checkCmd(text, COMMANDS.LANG_CHANGE)) {
-    user.step = 5;
-    return replyMessage(t(lang, 'lang_prompt_cli'));
-  }
-
-  if (user.step === 5) {
-    // Already handled above if it matches KO or JA commands, but if it doesn't:
-    return replyMessage(t(lang, 'cmd_unknown'));
-  }
-
-  if (checkCmd(text, COMMANDS.LIST)) {
-    const alerts = await FlightAlert.find({ lineUserId: MOCK_LINE_USER_ID, isActive: true });
-    if (alerts.length === 0) return replyMessage(t(lang, 'no_alert'));
-    const listMsg = alerts.map((a, idx) => `${idx + 1}. [${a.departure_id}->${a.arrival_id}] ${a.outbound_date} (${a.target_price.toLocaleString()} ${user.currency})`).join('\n');
-    return replyMessage(`${t(lang, 'list_header')}${listMsg}`);
-  }
-
-  if (checkCmd(text, COMMANDS.DELETE)) {
-    const alerts = await FlightAlert.find({ lineUserId: MOCK_LINE_USER_ID, isActive: true });
-    if (alerts.length === 0) return replyMessage(t(lang, 'no_alert'));
-    const listMsg = alerts.map((a, idx) => `${idx + 1}. [${a.departure_id}->${a.arrival_id}] ${a.outbound_date}`).join('\n');
-    user.step = 10;
-    await user.save();
-    return replyMessage(`${t(lang, 'del_prompt')}\n\n${listMsg}`);
-  }
-
-  if (user.step === 10) {
-    const alerts = await FlightAlert.find({ lineUserId: MOCK_LINE_USER_ID, isActive: true });
-    const idx = Number(text) - 1;
-    if (isNaN(idx) || idx < 0 || idx >= alerts.length) {
-      return replyMessage(t(lang, 'invalid_num'));
+  const adapter = {
+    sendText: async (text) => {
+      // CLI에선 특수 문법으로 출력된 경우 일반 텍스트로 치환 (예: Quick Reply 안내문 정리)
+      const cleanText = text.replace(/또는 아래 버튼을 눌러주세요.+$/, "").replace(/または下のボタン.+$/, "").trim();
+      return replyMessage(cleanText);
+    },
+    sendQuickReply: async (text, items) => {
+      // CLI에서는 버튼 대신 '[옵션1 / 옵션2]' 텍스트를 출력
+      const optionsText = items.map(item => item.action.text || item.action.label).join(" / ");
+      const cleanText = text.replace(/또는 아래 버튼을 눌러주세요.+$/, "").replace(/または下のボタン.+$/, "").trim();
+      return replyMessage(`${cleanText}\n🔘 옵션: [ ${optionsText} ]`);
     }
-    await FlightAlert.deleteOne({ _id: alerts[idx]._id });
-    user.step = 0;
-    await user.save();
-    return replyMessage(t(lang, 'deleted'));
-  }
+  };
 
-  if (user.step === 0) {
-    if (checkCmd(text, COMMANDS.REGISTER)) {
-      user.step = 1;
-      user.tempData = {};
-      await user.save();
-      return replyMessage(t(lang, 'dep'));
-    } else {
-      return replyMessage(t(lang, 'cmd_unknown'));
-    }
-  }
-
-  if (user.step === 1) {
-    user.tempData.departure_id = text.toUpperCase();
-    user.step = 2;
-    await user.save();
-    return replyMessage(t(lang, 'arr'));
-  }
-
-  if (user.step === 2) {
-    user.tempData.arrival_id = text.toUpperCase();
-    user.step = 3;
-    await user.save();
-    return replyMessage(t(lang, 'date'));
-  }
-
-  if (user.step === 3) {
-    user.tempData.outbound_date = text;
-    user.step = 4;
-    await user.save();
-    return replyMessage(t(lang, 'price', { currency: user.currency }));
-  }
-
-  if (user.step === 4) {
-    const targetPrice = Number(text);
-    if (isNaN(targetPrice)) return replyMessage(t(lang, 'price_err'));
-
-    await FlightAlert.create({
-      lineUserId: MOCK_LINE_USER_ID,
-      departure_id: user.tempData.departure_id,
-      arrival_id: user.tempData.arrival_id,
-      outbound_date: user.tempData.outbound_date,
-      target_price: targetPrice
-    });
-
-    user.step = 0;
-    user.tempData = {};
-    await user.save();
-
-    return replyMessage(`${t(lang, 'done')}\n${user.tempData.departure_id} -> ${user.tempData.arrival_id} (${targetPrice.toLocaleString()} ${user.currency})`);
+  try {
+    await processUserMessage(MOCK_LINE_USER_ID, userText, adapter);
+  } catch (err) {
+    console.error("❌ Error while processing message:", err);
   }
 }
 

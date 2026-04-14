@@ -14,7 +14,9 @@ const UserStateSchema = new mongoose.Schema({
   tempData: {
     departure_id: String,
     arrival_id: String,
+    flight_type: Number,
     outbound_date: String,
+    return_date: String,
     target_price: Number
   }
 }, { timestamps: true });

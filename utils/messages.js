@@ -1,7 +1,7 @@
 export const COMMANDS = {
   CANCEL: ["취소", "cancel"],
-  LANG_KO: ["한국어", "ko", "1"],
-  LANG_JA: ["日本語", "일본어", "jp", "2"],
+  LANG_KO: ["한국어", "ko"],
+  LANG_JA: ["日本語", "일본어", "jp"],
   LANG_CHANGE: ["언어", "言語", "lang", "언어변경"],
   LIST: ["목록", "リスト", "list"],
   DELETE: ["삭제", "削除", "delete"],
@@ -12,7 +12,7 @@ export const checkCmd = (text, cmdList) => {
   return cmdList.some(c => c.toLowerCase() === text.toLowerCase());
 };
 
-const COMMON_SENTENCES = {
+export const COMMON_SENTENCES = {
   CHANGE_LANG_KO: "🇰🇷 설정이 한국어로 변경되었습니다. (통화: KRW)",
   CHANGE_LANG_JA: "🇯🇵 設定が日本語に変更されました。(通貨: JPY)",
 }
@@ -20,43 +20,55 @@ const COMMON_SENTENCES = {
 const DICTIONARY = {
   ko: {
     cancel: "❌ 등록이 취소되었습니다. 대기 상태로 돌아갑니다.",
-    cmd_unknown: "명령어를 알 수 없습니다. 사용 가능한 명령어: 등록(add alert), 목록(list), 삭제(delete), 언어변경(lang)",
     dep: "🛫 출발 공항 코드를 영문 3자리로 입력해주세요. (예: ICN)",
     arr: "🛬 도착 공항 코드를 영문 3자리로 입력해주세요. (예: NRT)",
-    date: "📅 가는 날짜를 입력해주세요. (예: 2026-06-01)",
+    flight_type_cli: "왕복/편도를 선택해주세요 (1: 왕복, 2: 편도)\n1. 왕복 (Round-trip)\n2. 편도 (One-way)",
+    date: "📅 가는 날짜를 입력해주세요.\n시간대를 지정하려면 시간을 뒤에 붙여주세요.\n[입력 예시]\n2026-06-12 (시간 무관)\n2026-06-12 17:30-20:00 (특정 시간 사이)\n2026-06-12 17:30- (해당 시간 이후)",
+    return_date: "📅 오는 날짜를 입력해주세요.\n(가는 날짜와 동일하게 시간 지정이 가능합니다.)",
     price: "💰 알림을 받을 목표 가격을 숫자만 입력해주세요. 단위: {currency}",
-    price_err: "숫자만 입력해주세요!",
     done: "🎉 알림 등록이 완료되었습니다!",
-    no_alert: "등록된 자동 알림이 없습니다.",
     del_prompt: "🗑 삭제할 알림의 번호를 입력해주세요. 취소하려면 '취소'를 입력하세요.",
-    invalid_num: "유효하지 않은 번호입니다.",
     deleted: "✅ 삭제되었습니다.",
     change_lang_ko: COMMON_SENTENCES.CHANGE_LANG_KO,
     change_lang_ja: COMMON_SENTENCES.CHANGE_LANG_JA,
-    lang_prompt_cli: "언어를 선택해주세요 (1 or 2를 입력)\n1. 한국어 (KRW)\n2. 日本語 (JPY)",
-    lang_prompt_line: "언어를 선택해주세요 (1 or 2를 입력)\n1. 한국어 (KRW)\n2. 日本語 (JPY)\n\n또는 아래 버튼을 눌러주세요",
+    lang_prompt_cli: "언어를 선택해주세요 (ko or jp를 입력)\nko: 한국어 (KRW)\njp: 日本語 (JPY)",
+    lang_prompt_line: "언어를 선택해주세요 (ko or jp를 입력)\nko: 한국어 (KRW)\njp: 日本語 (JPY)\n\n또는 아래 버튼을 눌러주세요",
     list_header: "📋 현재 등록된 알림 목록:\n",
-    flight_alert_found: "✈️ 목표가 이하 항공편 발견!\n\n여정: {dep} -> {arr}\n날짜: {date}\n\n[최저가 순 랭킹]\n{flights}\n\n🔗 공식 예약처 구글플라이트 접속:\n{url}"
+    flight_alert_found: "✈️ 목표가 이하 항공편 발견!\n\n여정: {typeStr} {dep} -> {arr}\n가는날: {date}\n{returnStr}\n[최저가 순 랭킹]\n{flights}\n\n🔗 공식 예약처 구글플라이트 접속:\n{url}",
+    // error msg
+    cmd_unknown: "명령어를 알 수 없습니다. 사용 가능한 명령어: 등록(add alert), 목록(list), 삭제(delete), 언어변경(lang)",
+    price_err: "숫자만 입력해주세요!",
+    no_alert: "등록된 자동 알림이 없습니다.",
+    invalid_num: "유효하지 않은 번호입니다.",
+    error_flight_type: "1 또는 2를 입력해주세요.",
+    invalid_airport: "⚠️ 공항 코드는 영문 3자리로 정확히 입력해주세요! (예: ICN)",
+    invalid_date: "⚠️ 올바른 날짜 형식이 아닙니다 (예: 2026-06-12).",
   },
   ja: {
     cancel: "❌ キャンセルされました。最初の状態に戻ります。",
-    cmd_unknown: "コマンドが不明です。使用可能なコマンド: 登録(add alert), リスト(list), 削除(delete), 言語変更 or 言語(lang)",
     dep: "🛫 出発空港コードを3文字で入力してください。（例：ICN）",
     arr: "🛬 到着空港コードを3文字で入力してください。（例：NRT）",
-    date: "📅 出発日を入力してください。（例：2026-06-01）",
+    flight_type_cli: "往復/片道を選択してください (1: 往復, 2: 片道)\n1. 往復 (Round-trip)\n2. 片道 (One-way)",
+    date: "📅 出発日を入力してください。\n時間を指定する場合は、以下のように入力してください。\n[入力例]\n2026-06-12 (時間問わず)\n2026-06-12 17:30-20:00 (特定の時間帯)\n2026-06-12 17:30- (その時間以降)",
+    return_date: "📅 到着日（帰りの日）を入力してください。\n(出発日と同様に時間の指定が可能です)",
     price: "💰 目安価格を数字のみで入力してください。単位: {currency}",
-    price_err: "数字のみで入力してください！",
     done: "🎉 アラート登録が完了しました！",
-    no_alert: "登録されたアラートがありません。",
     del_prompt: "🗑 削除するアラートの番号を入力してください。",
-    invalid_num: "無効な番号です。",
     deleted: "✅ 削除されました。",
     change_lang_ko: COMMON_SENTENCES.CHANGE_LANG_KO,
     change_lang_ja: COMMON_SENTENCES.CHANGE_LANG_JA,
-    lang_prompt_cli: "言語を選択してください (1 or 2を入力)\n1. 한국어 (KRW)\n2. 日本語 (JPY)",
-    lang_prompt_line: "言語を選択してください (1 or 2を入力)\n1. 한국어 (KRW)\n2. 日本語 (JPY)\n\nまたは下のボタンを押してください",
+    lang_prompt_cli: "言語を選択してください (ko or jpを入力)\nko: 한국어 (KRW)\njp: 日本語 (JPY)",
+    lang_prompt_line: "言語を選択してください (ko or jpを入力)\nko: 한국어 (KRW)\njp: 日本語 (JPY)\n\nまたは下のボタンを押してください",
     list_header: "📋 アラート一覧:\n",
-    flight_alert_found: "✈️ 目安価格以下のフライトを発見！\n\n旅程: {dep} -> {arr}\n日付: {date}\n\n[最安値ランキング]\n{flights}\n\n🔗 Googleフライトで予約する:\n{url}"
+    flight_alert_found: "✈️ 目安価格以下のフライトを発見！\n\n旅程: {typeStr} {dep} -> {arr}\n出発日: {date}\n{returnStr}\n[最安値ランキング]\n{flights}\n\n🔗 Googleフライトで予約する:\n{url}",
+    // error msg
+    cmd_unknown: "コマンドが不明です。使用可能なコマンド: 登録(add alert), リスト(list), 削除(delete), 言語変更 or 言語(lang)",
+    price_err: "数字のみで入力してください！",
+    no_alert: "登録されたアラートがありません。",
+    invalid_num: "無効な番号です。",
+    error_flight_type: "1 か 2 を入力してください。",
+    invalid_airport: "⚠️ 空港コードはアルファベット3文字で入力してください！ (例: NRT)",
+    invalid_date: "⚠️ 日付の形式が正しくありません (例: 2026-06-12)。",
   }
 };
 

@@ -11,6 +11,51 @@ import { FlightAlert } from "../models/FlightAlert.js";
 import { UserState } from "../models/UserState.js";
 import { t } from "../utils/messages.js";
 
+function parseDateInput(input) {
+  if (!input) return { date: null };
+  const parts = input.trim().split(/\s+/);
+  const dateObj = { date: parts[0] };
+  if (parts.length > 1) {
+    const timePart = parts[1];
+    if (timePart.includes("-")) {
+      const [startStr, endStr] = timePart.split("-");
+      if (startStr) {
+        const [h, m] = startStr.split(":");
+        dateObj.startHour = parseInt(h, 10);
+        dateObj.startMin = m ? parseInt(m, 10) : 0;
+      }
+      if (endStr) {
+        const [h, m] = endStr.split(":");
+        dateObj.endHour = parseInt(h, 10);
+        dateObj.endMin = m ? parseInt(m, 10) : 0;
+      }
+    }
+  }
+  return dateObj;
+}
+
+function isWithinTimeRange(flightTimeStr, parsedRange) {
+  if (parsedRange.startHour == null && parsedRange.endHour == null) return true;
+  const timeRegex = /\s(\d{1,2}):(\d{2})/;
+  const match = flightTimeStr.match(timeRegex);
+  if (!match) return true;
+
+  const h = parseInt(match[1], 10);
+  const m = parseInt(match[2], 10);
+  const totalMins = h * 60 + m;
+
+  if (parsedRange.startHour != null && !isNaN(parsedRange.startHour)) {
+    const startMins = parsedRange.startHour * 60 + (parsedRange.startMin || 0);
+    if (totalMins < startMins) return false;
+  }
+
+  if (parsedRange.endHour != null && !isNaN(parsedRange.endHour)) {
+    const endMins = parsedRange.endHour * 60 + (parsedRange.endMin || 0);
+    if (totalMins > endMins) return false;
+  }
+  return true;
+}
+
 async function checkFlight() {
   console.log("✈️ Flight check script is running...");
   console.log("Current time:", new Date().toISOString());
@@ -30,19 +75,26 @@ async function checkFlight() {
     const lang = (user && user.language) ? user.language : "ko";
     const currency = (user && user.currency) ? user.currency : "KRW";
 
+    const outParsed = parseDateInput(alert.outbound_date);
+    const retParsed = alert.flight_type === 1 ? parseDateInput(alert.return_date) : null;
+
     const params = {
       engine: "google_flights",
       departure_id: alert.departure_id,
       arrival_id: alert.arrival_id,
-      outbound_date: alert.outbound_date,
-      type: 1, 
+      outbound_date: outParsed.date,
+      type: alert.flight_type || 1,
       currency: currency,
       hl: lang,
       api_key: apiKey
     };
 
+    if (alert.flight_type === 1 && retParsed && retParsed.date) {
+      params.return_date = retParsed.date;
+    }
+
     try {
-      console.log(`\n🔍 Searching: ${params.departure_id}->${params.arrival_id} (${params.outbound_date}) for USER ${alert.lineUserId.substring(0,6)}... [Lang: ${lang}, Curr: ${currency}]`);
+      console.log(`\n🔍 Searching: ${params.departure_id}->${params.arrival_id} (${params.outbound_date}) for USER ${alert.lineUserId.substring(0, 6)}... [Lang: ${lang}, Curr: ${currency}]`);
       const response = await axios.get("https://serpapi.com/search.json", { params });
 
       const bestFlights = response.data.best_flights || [];
@@ -51,8 +103,21 @@ async function checkFlight() {
 
       allFlights = allFlights.filter(f => f.price !== undefined && f.price !== null);
 
+      // 시간 필터링!
+      allFlights = allFlights.filter(f => {
+        if (!f.flights || f.flights.length === 0) return false;
+        const outTime = f.flights[0].departure_airport.time;
+        if (!isWithinTimeRange(outTime, outParsed)) return false;
+
+        if (alert.flight_type === 1 && retParsed && f.flights.length > 1) {
+          const retTime = f.flights[f.flights.length - 1].departure_airport.time; // 마지막 비행이 돌아오는 편
+          if (!isWithinTimeRange(retTime, retParsed)) return false;
+        }
+        return true;
+      });
+
       if (allFlights.length === 0) {
-        console.log(`🤔 [${alert.departure_id}->${alert.arrival_id}] No flight data found.`);
+        console.log(`🤔 [${alert.departure_id}->${alert.arrival_id}] No matching flight data found within time range.`);
         continue;
       }
 
@@ -66,7 +131,7 @@ async function checkFlight() {
       if (cheapestPrice <= alert.target_price) {
         // 목표가 달성!
         console.log(`🚨 Target price reached! Sending LINE message to ${alert.lineUserId}...`);
-        
+
         const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
         const enableLineMessage = process.env.ENABLE_LINE_MESSAGE === "true";
 
@@ -86,10 +151,15 @@ async function checkFlight() {
           return `${index + 1}. ${airlines} (${departureTime}) : ${flight.price.toLocaleString()} ${currency}`;
         }).join("\n");
 
+        const typeStr = alert.flight_type === 1 ? (lang === 'ko' ? '[왕복]' : '[往復]') : (lang === 'ko' ? '[편도]' : '[片道]');
+        const returnStr = alert.flight_type === 1 ? (lang === 'ko' ? `오는날: ${alert.return_date}` : `到着日: ${alert.return_date}`) : '';
+
         const messageText = t(lang, 'flight_alert_found', {
+          typeStr,
           dep: params.departure_id,
           arr: params.arrival_id,
-          date: params.outbound_date,
+          date: alert.outbound_date,
+          returnStr: returnStr,
           flights: flightsInfoText,
           url: bookingUrl
         });
