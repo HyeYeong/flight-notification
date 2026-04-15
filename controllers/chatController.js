@@ -18,6 +18,38 @@ export async function processUserMessage(userId, userText, adapter) {
     return adapter.sendText(t(lang, 'cancel'));
   }
 
+  // ── admin login: "command: admin [password]" ──────────────────────────────
+  if (text.toLowerCase().startsWith('admin ')) {
+    const inputPassword = text.slice(6).trim();
+    const adminSecret = process.env.CRON_SECRET;
+    if (inputPassword === adminSecret) {
+      user.isAdmin = true;
+      await user.save();
+      return adapter.sendText(lang === 'ko'
+        ? '🔑 관리자 로그인 성공!\n`search now` 를 입력하면 즉시 항공권 검색을 시작합니다.'
+        : '🔑 管理者ログイン成功！\n`search now` と入力するとすぐに検索を開始します。');
+    } else {
+      return adapter.sendText(lang === 'ko' ? '❌ 비밀번호가 틀렸습니다.' : '❌ パスワードが間違っています。');
+    }
+  }
+
+  // ── admin only: "search now" ──────────────────────
+  if (text.toLowerCase() === 'search now') {
+    if (!user.isAdmin) {
+      return adapter.sendText(lang === 'ko' ? '❌ 관리자 권한이 필요합니다. `admin [비밀번호]` 로 먼저 로그인해 주세요.' : '❌ 管理者権限が必要です。先に `admin [パスワード]` でログインしてください。');
+    }
+    // 비동기 call cron API (응답은 바로 보내고 백그라운드에서 검색 실행)
+    const cronUrl = `${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'}/api/cron`;
+    import('axios').then(({ default: axios }) => {
+      axios.get(cronUrl, {
+        headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` }
+      }).catch(e => console.error('Admin search trigger error:', e.message));
+    });
+    return adapter.sendText(lang === 'ko'
+      ? '🔍 검색을 시작합니다! 목표가에 도달한 항공편이 있으면 알림을 보내드립니다.'
+      : '🔍 検索を開始します！目標価格以下の便が見つかった場合、通知をお送りします。');
+  }
+
   if (checkCmd(text, COMMANDS.LANG_KO)) {
     if (user.currency === "JPY") {
       const alerts = await FlightAlert.find({ lineUserId: userId });
