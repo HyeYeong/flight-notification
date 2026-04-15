@@ -78,6 +78,11 @@ async function checkFlight() {
     const outParsed = parseDateInput(alert.outbound_date);
     const retParsed = alert.flight_type === 1 ? parseDateInput(alert.return_date) : null;
 
+    if (alert.flight_type === 1 && (!retParsed || !retParsed.date)) {
+      console.log(`⚠️ Skipping invalid alert ${alert._id} (Round-trip but missing return date). Saves API calls!`);
+      continue;
+    }
+
     const params = {
       engine: "google_flights",
       departure_id: alert.departure_id,
