@@ -57,6 +57,9 @@ export default async function handler(req, res) {
     return res.status(401).end("Unauthorized");
   }
 
+  // 관리자가 search now로 호출한 경우, 결과를 알려줄 LINE user ID
+  const reportTo = req.query.reportTo || null;
+
   console.log("✈️ Vercel Cron API is running...");
   const apiKey = process.env.SERP_API_KEY;
   if (!apiKey) {
@@ -67,6 +70,9 @@ export default async function handler(req, res) {
   await connectDB();
   const activeAlerts = await FlightAlert.find({ isActive: true });
   console.log(`📌 Found ${activeAlerts.length} active flight alerts.`);
+
+  // 관리자 리포트용 결과 누적
+  const reportLines = [];
 
   for (const alert of activeAlerts) {
     const user = await UserState.findOne({ lineUserId: alert.lineUserId });
@@ -104,15 +110,24 @@ export default async function handler(req, res) {
         return true;
       });
 
-      if (allFlights.length === 0) continue;
+      if (allFlights.length === 0) {
+        reportLines.push(`⚠️ [${alert.departure_id}→${alert.arrival_id}] 검색 결과 없음 (시간 조건 초과)`);
+        continue;
+      }
 
       allFlights.sort((a, b) => a.price - b.price);
-      const topFlights = allFlights.slice(0, 3);
+      const topFlights = allFlights.slice(0, 4);
       const bookingUrl = response.data.search_metadata.google_flights_url;
       const cheapestPrice = topFlights[0].price;
 
       if (cheapestPrice <= alert.target_price) {
         console.log(`🚨 Target price reached for ${alert.lineUserId}`);
+        reportLines.push(`✅ [${alert.departure_id}→${alert.arrival_id}] 목표가 달성! 최저 ${cheapestPrice.toLocaleString()} ${currency}`);
+      } else {
+        reportLines.push(`🔍 [${alert.departure_id}→${alert.arrival_id}] 현재 최저 ${cheapestPrice.toLocaleString()} ${currency} (목표: ${alert.target_price.toLocaleString()} ${currency} 이하)`);
+      }
+
+      if (cheapestPrice <= alert.target_price) {
 
         const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
         const enableLineMessage = process.env.ENABLE_LINE_MESSAGE === "true";
@@ -153,8 +168,24 @@ export default async function handler(req, res) {
       }
     } catch (e) {
       console.error(`❌ Error fetching flights for ${alert._id}`, e.message);
+      reportLines.push(`❌ [${alert.departure_id}→${alert.arrival_id}] 검색 오류: ${e.message}`);
     }
   }
 
-  return res.status(200).json({ success: true, message: "Flight check completed." });
+  // 관리자에게 검색 결과 요약 발송
+  if (reportTo) {
+    const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+    if (lineToken) {
+      const summary = reportLines.length > 0
+        ? `📊 검색 완료 결과:\n\n${reportLines.join('\n')}`
+        : '📭 등록된 활성 알림이 없습니다.';
+      await axios.post(
+        "https://api.line.me/v2/bot/message/push",
+        { to: reportTo, messages: [{ type: "text", text: summary }] },
+        { headers: { "Content-Type": "application/json", Authorization: `Bearer ${lineToken}` } }
+      ).catch(e => console.error('Admin report error:', e.message));
+    }
+  }
+
+  return res.status(200).json({ success: true, message: "Flight check completed.", results: reportLines });
 }

@@ -39,7 +39,8 @@ export async function processUserMessage(userId, userText, adapter) {
       return adapter.sendText(lang === 'ko' ? '❌ 관리자 권한이 필요합니다. `admin [비밀번호]` 로 먼저 로그인해 주세요.' : '❌ 管理者権限が必要です。先に `admin [パスワード]` でログインしてください。');
     }
     // 비동기 call cron API (응답은 바로 보내고 백그라운드에서 검색 실행)
-    const cronUrl = `${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'}/api/cron`;
+    const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
+    const cronUrl = `${baseUrl}/api/cron?reportTo=${encodeURIComponent(userId)}`;
     import('axios').then(({ default: axios }) => {
       axios.get(cronUrl, {
         headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` }
