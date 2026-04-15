@@ -1,0 +1,160 @@
+import axios from "axios";
+import { connectDB } from "../models/db.js";
+import { FlightAlert } from "../models/FlightAlert.js";
+import { UserState } from "../models/UserState.js";
+import { t } from "../utils/messages.js";
+
+// 날짜/시간 파싱 헬퍼 함수
+function parseDateInput(input) {
+  if (!input) return { date: null };
+  const parts = input.trim().split(/\s+/);
+  const dateObj = { date: parts[0] };
+  if (parts.length > 1) {
+    const timePart = parts[1];
+    if (timePart.includes("-")) {
+      const [startStr, endStr] = timePart.split("-");
+      if (startStr) {
+        const [h, m] = startStr.split(":");
+        dateObj.startHour = parseInt(h, 10);
+        dateObj.startMin = m ? parseInt(m, 10) : 0;
+      }
+      if (endStr) {
+        const [h, m] = endStr.split(":");
+        dateObj.endHour = parseInt(h, 10);
+        dateObj.endMin = m ? parseInt(m, 10) : 0;
+      }
+    }
+  }
+  return dateObj;
+}
+
+// 시간 범위 필터 함수
+function isWithinTimeRange(flightTimeStr, parsedRange) {
+  if (parsedRange.startHour == null && parsedRange.endHour == null) return true;
+  const timeRegex = /\s(\d{1,2}):(\d{2})/;
+  const match = flightTimeStr.match(timeRegex);
+  if (!match) return true;
+
+  const h = parseInt(match[1], 10);
+  const m = parseInt(match[2], 10);
+  const totalMins = h * 60 + m;
+
+  if (parsedRange.startHour != null && !isNaN(parsedRange.startHour)) {
+    const startMins = parsedRange.startHour * 60 + (parsedRange.startMin || 0);
+    if (totalMins < startMins) return false;
+  }
+
+  if (parsedRange.endHour != null && !isNaN(parsedRange.endHour)) {
+    const endMins = parsedRange.endHour * 60 + (parsedRange.endMin || 0);
+    if (totalMins > endMins) return false;
+  }
+  return true;
+}
+
+export default async function handler(req, res) {
+  // 인증 체크: 외부인이 API를 마음대로 호출해서 비용을 깎아먹지 못하게 Secret 보호
+  if (req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}`) {
+    return res.status(401).end("Unauthorized");
+  }
+
+  console.log("✈️ Vercel Cron API is running...");
+  const apiKey = process.env.SERP_API_KEY;
+  if (!apiKey) {
+    console.error("❌ SERP_API_KEY is missing");
+    return res.status(500).end("API Key Missing");
+  }
+
+  await connectDB();
+  const activeAlerts = await FlightAlert.find({ isActive: true });
+  console.log(`📌 Found ${activeAlerts.length} active flight alerts.`);
+
+  for (const alert of activeAlerts) {
+    const user = await UserState.findOne({ lineUserId: alert.lineUserId });
+    const lang = (user && user.language) ? user.language : "ko";
+    const currency = (user && user.currency) ? user.currency : "KRW";
+
+    const outParsed = parseDateInput(alert.outbound_date);
+    const retParsed = alert.flight_type === 1 ? parseDateInput(alert.return_date) : null;
+
+    if (alert.flight_type === 1 && (!retParsed || !retParsed.date)) {
+      continue;
+    }
+
+    const params = {
+      engine: "google_flights",
+      departure_id: alert.departure_id,
+      arrival_id: alert.arrival_id,
+      outbound_date: outParsed.date,
+      type: alert.flight_type || 1,
+      currency: currency,
+      hl: lang,
+      stops: "1", // 직항만
+      api_key: apiKey
+    };
+
+    try {
+      const response = await axios.get("https://serpapi.com/search.json", { params });
+      let allFlights = [...(response.data.best_flights || []), ...(response.data.other_flights || [])];
+      allFlights = allFlights.filter(f => f.price !== undefined && f.price !== null);
+
+      allFlights = allFlights.filter(f => {
+        if (!f.flights || f.flights.length === 0) return false;
+        const outTime = f.flights[0].departure_airport.time;
+        if (!isWithinTimeRange(outTime, outParsed)) return false;
+        return true;
+      });
+
+      if (allFlights.length === 0) continue;
+
+      allFlights.sort((a, b) => a.price - b.price);
+      const topFlights = allFlights.slice(0, 3);
+      const bookingUrl = response.data.search_metadata.google_flights_url;
+      const cheapestPrice = topFlights[0].price;
+
+      if (cheapestPrice <= alert.target_price) {
+        console.log(`🚨 Target price reached for ${alert.lineUserId}`);
+
+        const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+        const enableLineMessage = process.env.ENABLE_LINE_MESSAGE === "true";
+
+        const flightsInfoText = topFlights.map((flight, index) => {
+          let flightStr = `${index + 1}. 💰 ${flight.price.toLocaleString()} ${currency}\n`;
+          let outTime = flight.flights[0].departure_airport.time;
+          let outAirline = flight.flights[0].airline;
+          
+          if (flight.flights.length > 1) {
+            flightStr += `   🛫 ${outTime} (${outAirline}) 외 ${flight.flights.length - 1}회 경유`;
+          } else {
+            flightStr += `   🛫 ${outTime} (${outAirline})`;
+          }
+          return flightStr;
+        }).join("\n\n");
+
+        const typeStr = alert.flight_type === 1 ? (lang === 'ko' ? '[왕복]' : '[往復]') : (lang === 'ko' ? '[편도]' : '[片道]');
+        const returnStr = alert.flight_type === 1 ? (lang === 'ko' ? `오는날: ${alert.return_date}` : `到着日: ${alert.return_date}`) : '';
+
+        const messageText = t(lang, 'flight_alert_found', {
+          typeStr,
+          dep: params.departure_id,
+          arr: params.arrival_id,
+          date: alert.outbound_date,
+          returnStr: returnStr,
+          flights: flightsInfoText,
+          url: bookingUrl
+        });
+
+        if (enableLineMessage && lineToken) {
+          await axios.post(
+            "https://api.line.me/v2/bot/message/push",
+            { to: alert.lineUserId, messages: [{ type: "text", text: messageText }] },
+            { headers: { "Content-Type": "application/json", Authorization: `Bearer ${lineToken}` } }
+          );
+        }
+      }
+    } catch (e) {
+      console.error(`❌ Error fetching flights for ${alert._id}`, e.message);
+    }
+  }
+
+  return res.status(200).json({ success: true, message: "Flight check completed." });
+}
