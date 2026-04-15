@@ -7,7 +7,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "chat:local": "node scripts/localChat.js",
     "check:local": "NODE_ENV=local node scripts/checkFlight.js",
-    "check:prod": "NODE_ENV=production node scripts/checkFlight.js"
+    "check:prod": "NODE_ENV=production node scripts/checkFlight.js",
+    "db:clean": "node scripts/cleanDb.js"
   },
   "keywords": [],
   "author": "",
