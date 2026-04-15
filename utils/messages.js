@@ -31,8 +31,8 @@ const DICTIONARY = {
     deleted: "✅ 삭제되었습니다.",
     change_lang_ko: COMMON_SENTENCES.CHANGE_LANG_KO,
     change_lang_ja: COMMON_SENTENCES.CHANGE_LANG_JA,
-    lang_prompt_cli: "언어를 선택해주세요 (ko or jp를 입력)\nko: 한국어 (KRW)\njp: 日本語 (JPY)",
-    lang_prompt_line: "언어를 선택해주세요 (ko or jp를 입력)\nko: 한국어 (KRW)\njp: 日本語 (JPY)\n\n또는 아래 버튼을 눌러주세요",
+    lang_prompt_cli: "언어를 선택해주세요 (ko 또는 jp를 입력)\nko: 한국어 (KRW)\njp: 日本語 (JPY)",
+    lang_prompt_line: "언어를 선택해주세요 (ko 또는 jp를 입력)\nko: 한국어 (KRW)\njp: 日本語 (JPY)\n\n또는 아래 버튼을 눌러주세요",
     list_header: "📋 현재 등록된 알림 목록:\n",
     flight_alert_found: "✈️ 목표가 이하 항공편 발견!\n\n여정: {typeStr} {dep} -> {arr}\n가는날: {date}\n{returnStr}\n[최저가 순 랭킹]\n{flights}\n\n🔗 공식 예약처 구글플라이트 접속:\n{url}",
     // error msg
@@ -57,8 +57,8 @@ const DICTIONARY = {
     deleted: "✅ 削除されました。",
     change_lang_ko: COMMON_SENTENCES.CHANGE_LANG_KO,
     change_lang_ja: COMMON_SENTENCES.CHANGE_LANG_JA,
-    lang_prompt_cli: "言語を選択してください (ko or jpを入力)\nko: 한국어 (KRW)\njp: 日本語 (JPY)",
-    lang_prompt_line: "言語を選択してください (ko or jpを入力)\nko: 한국어 (KRW)\njp: 日本語 (JPY)\n\nまたは下のボタンを押してください",
+    lang_prompt_cli: "言語を選択してください (ko または jpを入力)\nko: 한국어 (KRW)\njp: 日本語 (JPY)",
+    lang_prompt_line: "言語を選択してください (ko または jpを入力)\nko: 한국어 (KRW)\njp: 日本語 (JPY)\n\nまたは下のボタンを押してください",
     list_header: "📋 アラート一覧:\n",
     flight_alert_found: "✈️ 目安価格以下のフライトを発見！\n\n旅程: {typeStr} {dep} -> {arr}\n出発日: {date}\n{returnStr}\n[最安値ランキング]\n{flights}\n\n🔗 Googleフライトで予約する:\n{url}",
     // error msg

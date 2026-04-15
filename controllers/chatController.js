@@ -19,6 +19,13 @@ export async function processUserMessage(userId, userText, adapter) {
   }
 
   if (checkCmd(text, COMMANDS.LANG_KO)) {
+    if (user.currency === "JPY") {
+      const alerts = await FlightAlert.find({ lineUserId: userId });
+      for (const a of alerts) {
+        a.target_price = Math.round(a.target_price * 10);
+        await a.save();
+      }
+    }
     user.language = "ko";
     user.currency = "KRW";
     user.step = 0;
@@ -27,6 +34,13 @@ export async function processUserMessage(userId, userText, adapter) {
   }
 
   if (checkCmd(text, COMMANDS.LANG_JA)) {
+    if (user.currency === "KRW") {
+      const alerts = await FlightAlert.find({ lineUserId: userId });
+      for (const a of alerts) {
+        a.target_price = Math.round(a.target_price / 10);
+        await a.save();
+      }
+    }
     user.language = "ja";
     user.currency = "JPY";
     user.step = 0;
