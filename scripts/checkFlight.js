@@ -91,6 +91,7 @@ async function checkFlight() {
       type: alert.flight_type || 1,
       currency: currency,
       hl: lang,
+      stops: "1", // 직항만 (Nonstop only)
       api_key: apiKey
     };
 
@@ -108,15 +109,15 @@ async function checkFlight() {
 
       allFlights = allFlights.filter(f => f.price !== undefined && f.price !== null);
 
-      // 시간 필터링!
+      // 시간 필터링
       allFlights = allFlights.filter(f => {
         if (!f.flights || f.flights.length === 0) return false;
         const outTime = f.flights[0].departure_airport.time;
         if (!isWithinTimeRange(outTime, outParsed)) return false;
 
-        if (alert.flight_type === 1 && retParsed && f.flights.length > 1) {
-          const retTime = f.flights[f.flights.length - 1].departure_airport.time; // 마지막 비행이 돌아오는 편
-          if (!isWithinTimeRange(retTime, retParsed)) return false;
+        if (alert.flight_type === 1 && retParsed) {
+          // 참고: 구글 플라이트 API(SerpApi) 첫번째 응답에는 '가는 편(들)'의 정보만 담겨옴
+          // 오는 편의 세부 날짜 검증은 2차 API 호출이 필요하여, 로컬에서는 가는 편 일치만 확인함
         }
         return true;
       });
@@ -140,21 +141,18 @@ async function checkFlight() {
         const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
         const enableLineMessage = process.env.ENABLE_LINE_MESSAGE === "true";
 
-        if (!enableLineMessage) {
-          console.log("ℹ️ LINE messages are disabled in this environment (ENABLE_LINE_MESSAGE=false).");
-          continue;
-        }
-
-        if (!lineToken) {
-          console.error("❌ LINE_CHANNEL_ACCESS_TOKEN is missing.");
-          continue;
-        }
-
         const flightsInfoText = topFlights.map((flight, index) => {
-          const airlines = flight.flights.map(f => f.airline).join(", ");
-          const departureTime = flight.flights[0].departure_airport.time;
-          return `${index + 1}. ${airlines} (${departureTime}) : ${flight.price.toLocaleString()} ${currency}`;
-        }).join("\n");
+          let flightStr = `${index + 1}. 💰 ${flight.price.toLocaleString()} ${currency}\n`;
+          let outTime = flight.flights[0].departure_airport.time;
+          let outAirline = flight.flights[0].airline;
+
+          if (flight.flights.length > 1) {
+            flightStr += `   🛫 ${outTime} (${outAirline}) 외 ${flight.flights.length - 1}회 경유`;
+          } else {
+            flightStr += `   🛫 ${outTime} (${outAirline})`;
+          }
+          return flightStr;
+        }).join("\n\n");
 
         const typeStr = alert.flight_type === 1 ? (lang === 'ko' ? '[왕복]' : '[往復]') : (lang === 'ko' ? '[편도]' : '[片道]');
         const returnStr = alert.flight_type === 1 ? (lang === 'ko' ? `오는날: ${alert.return_date}` : `到着日: ${alert.return_date}`) : '';
@@ -168,6 +166,20 @@ async function checkFlight() {
           flights: flightsInfoText,
           url: bookingUrl
         });
+
+        console.log(`\n========== 푸시 알림 내용 미리보기 ==========`);
+        console.log(messageText);
+        console.log(`=============================================\n`);
+
+        if (!enableLineMessage) {
+          console.log("ℹ️ LINE messages are disabled in this environment (ENABLE_LINE_MESSAGE=false).");
+          continue;
+        }
+
+        if (!lineToken) {
+          console.error("❌ LINE_CHANNEL_ACCESS_TOKEN is missing.");
+          continue;
+        }
 
         try {
           await axios.post(
