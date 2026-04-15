@@ -128,7 +128,7 @@ async function checkFlight() {
       }
 
       allFlights.sort((a, b) => a.price - b.price);
-      const topFlights = allFlights.slice(0, 4);
+      const topFlights = allFlights.slice(0, 5); // rank 1에서 5위까지 표시
       const bookingUrl = response.data.search_metadata.google_flights_url;
       const cheapestPrice = topFlights[0].price;
 

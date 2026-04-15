@@ -15,7 +15,23 @@ export const checkCmd = (text, cmdList) => {
 export const COMMON_SENTENCES = {
   CHANGE_LANG_KO: "🇰🇷 설정이 한국어로 변경되었습니다. (통화: KRW)",
   CHANGE_LANG_JA: "🇯🇵 設定が日本語に変更されました。(通貨: JPY)",
-}
+};
+
+// 편도/왕복 레이블 공통 사전
+export const FLIGHT_TYPE_LABELS = {
+  roundTrip: { ko: '왕복', ja: '往復' },
+  oneWay: { ko: '편도', ja: '片道' },
+};
+
+// flight_type(1=왕복, 2=편도)
+export const getFlightTypeLabel = (flightType, lang) => {
+  const key = flightType === 1 ? 'roundTrip' : 'oneWay';
+  return FLIGHT_TYPE_LABELS[key][lang] || FLIGHT_TYPE_LABELS[key]['ko'];
+};
+
+export const getFlightTypeBracket = (flightType, lang) => {
+  return `[${getFlightTypeLabel(flightType, lang)}]`;
+};
 
 const DICTIONARY = {
   ko: {

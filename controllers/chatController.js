@@ -1,6 +1,6 @@
 import { UserState } from "../models/UserState.js";
 import { FlightAlert } from "../models/FlightAlert.js";
-import { t, COMMANDS, checkCmd } from "../utils/messages.js";
+import { t, COMMANDS, checkCmd, getFlightTypeLabel, getFlightTypeBracket } from "../utils/messages.js";
 
 export async function processUserMessage(userId, userText, adapter) {
   let user = await UserState.findOne({ lineUserId: userId });
@@ -115,13 +115,15 @@ export async function processUserMessage(userId, userText, adapter) {
     return alerts.map((a, idx) => {
       let dateField = a.outbound_date;
       if (a.flight_type === 1 && a.return_date) {
-        dateField += ` ~ ${a.return_date}`;
+        dateField += `\n  - 2nd✈️ : ${a.return_date}`;
       }
+
+      const flightTypeDisplay = getFlightTypeLabel(a.flight_type, lang);
       if (showPrice) {
         const priceText = lang === 'ko' ? `목표: ${a.target_price.toLocaleString()} ${currency} 이하` : `目標: ${a.target_price.toLocaleString()} ${currency} 以下`;
-        return `${idx + 1}. [${a.departure_id}->${a.arrival_id}] ${a.flight_type === 1 ? '왕복' : '편도'} ${dateField} (${priceText})`;
+        return `${idx + 1}.[${a.departure_id} ~ ${a.arrival_id}] ${flightTypeDisplay}\n  - 1st✈️ : ${dateField}\n   (${priceText})\n`;
       }
-      return `${idx + 1}. [${a.departure_id}->${a.arrival_id}] ${dateField}`;
+      return `${idx + 1}.[${a.departure_id} ~ ${a.arrival_id}] ${flightTypeDisplay} \n  - 1st✈️ : ${dateField}\n`;
     }).join('\n');
   };
 
@@ -257,7 +259,7 @@ export async function processUserMessage(userId, userText, adapter) {
     const arr = user.tempData.arrival_id;
     const outDate = user.tempData.outbound_date;
     const retDate = user.tempData.return_date;
-    const typeStr = isRound ? (lang === 'ko' ? '[왕복]' : '[往復]') : (lang === 'ko' ? '[편도]' : '[片道]');
+    const typeStr = getFlightTypeBracket(user.tempData.flight_type, lang);
 
     user.step = 0;
     user.tempData = {};

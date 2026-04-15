@@ -2,7 +2,7 @@ import axios from "axios";
 import { connectDB } from "../models/db.js";
 import { FlightAlert } from "../models/FlightAlert.js";
 import { UserState } from "../models/UserState.js";
-import { t } from "../utils/messages.js";
+import { t, getFlightTypeBracket } from "../utils/messages.js";
 
 // 날짜/시간 파싱 헬퍼 함수
 function parseDateInput(input) {
@@ -116,7 +116,7 @@ export default async function handler(req, res) {
       }
 
       allFlights.sort((a, b) => a.price - b.price);
-      const topFlights = allFlights.slice(0, 4);
+      const topFlights = allFlights.slice(0, 5);
       const bookingUrl = response.data.search_metadata.google_flights_url;
       const cheapestPrice = topFlights[0].price;
 
@@ -136,7 +136,7 @@ export default async function handler(req, res) {
           let flightStr = `${index + 1}. 💰 ${flight.price.toLocaleString()} ${currency}\n`;
           let outTime = flight.flights[0].departure_airport.time;
           let outAirline = flight.flights[0].airline;
-          
+
           if (flight.flights.length > 1) {
             flightStr += `   🛫 ${outTime} (${outAirline}) 외 ${flight.flights.length - 1}회 경유`;
           } else {
@@ -145,7 +145,7 @@ export default async function handler(req, res) {
           return flightStr;
         }).join("\n\n");
 
-        const typeStr = alert.flight_type === 1 ? (lang === 'ko' ? '[왕복]' : '[往復]') : (lang === 'ko' ? '[편도]' : '[片道]');
+        const typeStr = getFlightTypeBracket(alert.flight_type, lang);
         const returnStr = alert.flight_type === 1 ? (lang === 'ko' ? `오는날: ${alert.return_date}` : `到着日: ${alert.return_date}`) : '';
 
         const messageText = t(lang, 'flight_alert_found', {
