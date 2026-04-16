@@ -67,7 +67,16 @@ async function checkFlight() {
   }
 
   await connectDB();
-  const activeAlerts = await FlightAlert.find({ isActive: true });
+
+  let query = { isActive: true };
+  if (process.env.NODE_ENV !== "production") {
+    // 로컬 테스트 시 다른 유저의 알림을 검색하지 않음
+    const localUserId = process.env.LOCAL_LINE_USER_ID || 'local_line_user_id';
+    query.lineUserId = localUserId;
+    console.log(`👀 Local mode: Filtering alerts for user ${localUserId} only.`);
+  }
+
+  const activeAlerts = await FlightAlert.find(query);
   console.log(`📌 Found ${activeAlerts.length} active flight alerts in DB.`);
 
   for (const alert of activeAlerts) {
