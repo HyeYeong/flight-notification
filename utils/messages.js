@@ -51,6 +51,8 @@ const DICTIONARY = {
     lang_prompt_line: "언어를 선택해주세요 (ko 또는 jp를 입력)\nko: 한국어 (KRW)\njp: 日本語 (JPY)\n\n또는 아래 버튼을 눌러주세요",
     list_header: "📋 현재 등록된 알림 목록:\n",
     flight_alert_found: "✈️ 목표가 이하 항공편 발견!\n\n여정: {typeStr} {dep} -> {arr}\n가는날: {date}\n{returnStr}\n[최저가 순 랭킹]\n{flights}\n\n🔗 공식 예약처 구글플라이트 접속:\n{url}",
+    flight_alert_not_found: "🕒 오늘 {time}에 비행편 검색을 시도했으나 조건에 맞는 항공편이 없습니다. ({dep} ➡️ {arr})",
+    flight_alert_not_met: "🕒 오늘 {time}에 검색을 시도했으나 목표가({targetPrice} {currency} 이하)에 도달한 항공편이 없습니다.\n(현재 최저가: {cheapestPrice} {currency}, {dep} ➡️ {arr})",
     // error msg
     cmd_unknown: "명령어를 알 수 없습니다. 사용 가능한 명령어: 등록(add alert), 목록(list), 삭제(delete), 언어변경(lang)",
     price_err: "숫자만 입력해주세요!",
@@ -77,6 +79,8 @@ const DICTIONARY = {
     lang_prompt_line: "言語を選択してください (ko または jpを入力)\nko: 한국어 (KRW)\njp: 日本語 (JPY)\n\nまたは下のボタンを押してください",
     list_header: "📋 アラート一覧:\n",
     flight_alert_found: "✈️ 目安価格以下のフライトを発見！\n\n旅程: {typeStr} {dep} -> {arr}\n出発日: {date}\n{returnStr}\n[最安値ランキング]\n{flights}\n\n🔗 Googleフライトで予約する:\n{url}",
+    flight_alert_not_found: "🕒 本日 {time} に検索を試みましたが、条件に合うフライトがありませんでした。 ({dep} ➡️ {arr})",
+    flight_alert_not_met: "🕒 本日 {time} に検索を試みましたが、目標価格({targetPrice} {currency} 以下)に達したフライトがありません。\n（現在最安値: {cheapestPrice} {currency}, {dep} ➡️ {arr}）",
     // error msg
     cmd_unknown: "コマンドが不明です。使用可能なコマンド: 登録(add alert), リスト(list), 削除(delete), 言語変更 or 言語(lang)",
     price_err: "数字のみで入力してください！",

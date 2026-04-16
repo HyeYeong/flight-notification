@@ -110,8 +110,20 @@ export default async function handler(req, res) {
         return true;
       });
 
+      const nowTime = new Date().toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' });
+      const enableLineMessage = process.env.ENABLE_LINE_MESSAGE === "true";
+      const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+
       if (allFlights.length === 0) {
         reportLines.push(`⚠️ [${alert.departure_id}→${alert.arrival_id}] 검색 결과 없음 (시간 조건 초과)`);
+        if (enableLineMessage && lineToken) {
+          const notFoundMsg = t(lang, 'flight_alert_not_found', { time: nowTime, dep: alert.departure_id, arr: alert.arrival_id });
+          await axios.post(
+            "https://api.line.me/v2/bot/message/push",
+            { to: alert.lineUserId, messages: [{ type: "text", text: notFoundMsg }] },
+            { headers: { "Content-Type": "application/json", Authorization: `Bearer ${lineToken}` } }
+          ).catch(e => console.error(e.message));
+        }
         continue;
       }
 
@@ -128,10 +140,6 @@ export default async function handler(req, res) {
       }
 
       if (cheapestPrice <= alert.target_price) {
-
-        const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
-        const enableLineMessage = process.env.ENABLE_LINE_MESSAGE === "true";
-
         const flightsInfoText = topFlights.map((flight, index) => {
           let flightStr = `${index + 1}. 💰 ${flight.price.toLocaleString()} ${currency}\n`;
           let outTime = flight.flights[0].departure_airport.time;
@@ -163,7 +171,23 @@ export default async function handler(req, res) {
             "https://api.line.me/v2/bot/message/push",
             { to: alert.lineUserId, messages: [{ type: "text", text: messageText }] },
             { headers: { "Content-Type": "application/json", Authorization: `Bearer ${lineToken}` } }
-          );
+          ).catch(e => console.error(e.message));
+        }
+      } else {
+        if (enableLineMessage && lineToken) {
+          const notMetMsg = t(lang, 'flight_alert_not_met', {
+            time: nowTime,
+            dep: alert.departure_id,
+            arr: alert.arrival_id,
+            targetPrice: alert.target_price.toLocaleString(),
+            cheapestPrice: cheapestPrice.toLocaleString(),
+            currency: currency
+          });
+          await axios.post(
+            "https://api.line.me/v2/bot/message/push",
+            { to: alert.lineUserId, messages: [{ type: "text", text: notMetMsg }] },
+            { headers: { "Content-Type": "application/json", Authorization: `Bearer ${lineToken}` } }
+          ).catch(e => console.error(e.message));
         }
       }
     } catch (e) {
