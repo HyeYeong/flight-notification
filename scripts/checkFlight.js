@@ -79,6 +79,8 @@ async function checkFlight() {
   const activeAlerts = await FlightAlert.find(query);
   console.log(`📌 Found ${activeAlerts.length} active flight alerts in DB.`);
 
+  const userMessages = {};
+
   for (const alert of activeAlerts) {
     const user = await UserState.findOne({ lineUserId: alert.lineUserId });
     const lang = (user && user.language) ? user.language : "ko";
@@ -190,29 +192,33 @@ async function checkFlight() {
           continue;
         }
 
-        try {
-          await axios.post(
-            "https://api.line.me/v2/bot/message/push",
-            {
-              to: alert.lineUserId,
-              messages: [{ type: "text", text: messageText }]
-            },
-            {
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${lineToken}`
-              }
-            }
-          );
-          console.log("✅ LINE message sent successfully!");
-        } catch (lineError) {
-          console.error("❌ Error sending LINE message:", lineError.response ? lineError.response.data : lineError.message);
-        }
+        userMessages[alert.lineUserId] = userMessages[alert.lineUserId] || [];
+        userMessages[alert.lineUserId].push({ type: "text", text: messageText });
       } else {
         console.log(`⏰ Price is still higher than target.`);
       }
     } catch (error) {
       console.error(`❌ Error fetching flight data for alert ${alert._id}:`, error.message);
+    }
+  }
+
+  const enableLineMessageGlobal = process.env.ENABLE_LINE_MESSAGE === "true";
+  const lineTokenGlobal = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  if (enableLineMessageGlobal && lineTokenGlobal) {
+    for (const [userId, msgs] of Object.entries(userMessages)) {
+      for (let i = 0; i < msgs.length; i += 5) {
+        const chunk = msgs.slice(i, i + 5);
+        try {
+          await axios.post(
+            "https://api.line.me/v2/bot/message/push",
+            { to: userId, messages: chunk },
+            { headers: { "Content-Type": "application/json", Authorization: `Bearer ${lineTokenGlobal}` } }
+          );
+          console.log(`✅ LINE batch message sent successfully to ${userId.substring(0, 6)}!`);
+        } catch (lineError) {
+          console.error("❌ Error sending LINE batch message:", lineError.response ? lineError.response.data : lineError.message);
+        }
+      }
     }
   }
 

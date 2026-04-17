@@ -74,6 +74,9 @@ export default async function handler(req, res) {
   // 관리자 리포트용 결과 누적
   const reportLines = [];
 
+  // 유저별 라인 메시지 누적
+  const userMessages = {};
+
   for (const alert of activeAlerts) {
     const user = await UserState.findOne({ lineUserId: alert.lineUserId });
     const lang = (user && user.language) ? user.language : "ko";
@@ -117,12 +120,9 @@ export default async function handler(req, res) {
       if (allFlights.length === 0) {
         reportLines.push(`⚠️ [${alert.departure_id}→${alert.arrival_id}] 검색 결과 없음 (시간 조건 초과)`);
         if (enableLineMessage && lineToken) {
-          const notFoundMsg = t(lang, 'flight_alert_not_found', { time: nowTime, dep: alert.departure_id, arr: alert.arrival_id });
-          await axios.post(
-            "https://api.line.me/v2/bot/message/push",
-            { to: alert.lineUserId, messages: [{ type: "text", text: notFoundMsg }] },
-            { headers: { "Content-Type": "application/json", Authorization: `Bearer ${lineToken}` } }
-          ).catch(e => console.error(e.message));
+          const notFoundMsg = t(lang, 'flight_alert_not_found', { time: nowTime, dep: alert.departure_id, arr: alert.arrival_id, date: alert.outbound_date });
+          userMessages[alert.lineUserId] = userMessages[alert.lineUserId] || [];
+          userMessages[alert.lineUserId].push({ type: "text", text: notFoundMsg });
         }
         continue;
       }
@@ -167,11 +167,8 @@ export default async function handler(req, res) {
         });
 
         if (enableLineMessage && lineToken) {
-          await axios.post(
-            "https://api.line.me/v2/bot/message/push",
-            { to: alert.lineUserId, messages: [{ type: "text", text: messageText }] },
-            { headers: { "Content-Type": "application/json", Authorization: `Bearer ${lineToken}` } }
-          ).catch(e => console.error(e.message));
+          userMessages[alert.lineUserId] = userMessages[alert.lineUserId] || [];
+          userMessages[alert.lineUserId].push({ type: "text", text: messageText });
         }
       } else {
         if (enableLineMessage && lineToken) {
@@ -181,18 +178,33 @@ export default async function handler(req, res) {
             arr: alert.arrival_id,
             targetPrice: alert.target_price.toLocaleString(),
             cheapestPrice: cheapestPrice.toLocaleString(),
-            currency: currency
+            currency: currency,
+            date: alert.outbound_date
           });
-          await axios.post(
-            "https://api.line.me/v2/bot/message/push",
-            { to: alert.lineUserId, messages: [{ type: "text", text: notMetMsg }] },
-            { headers: { "Content-Type": "application/json", Authorization: `Bearer ${lineToken}` } }
-          ).catch(e => console.error(e.message));
+          userMessages[alert.lineUserId] = userMessages[alert.lineUserId] || [];
+          userMessages[alert.lineUserId].push({ type: "text", text: notMetMsg });
         }
       }
     } catch (e) {
       console.error(`❌ Error fetching flights for ${alert._id}`, e.message);
       reportLines.push(`❌ [${alert.departure_id}→${alert.arrival_id}] 검색 오류: ${e.message}`);
+    }
+  }
+
+  // 사용자들에게 누적된 메시지 일괄 발송 (API 리밋 및 데이터 유실 방지)
+  const isEnabled = process.env.ENABLE_LINE_MESSAGE === "true";
+  const globalLineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  if (isEnabled && globalLineToken) {
+    for (const [userId, msgs] of Object.entries(userMessages)) {
+      // LINE API allows up to 5 messages per push request
+      for (let i = 0; i < msgs.length; i += 5) {
+        const chunk = msgs.slice(i, i + 5);
+        await axios.post(
+          "https://api.line.me/v2/bot/message/push",
+          { to: userId, messages: chunk },
+          { headers: { "Content-Type": "application/json", Authorization: `Bearer ${globalLineToken}` } }
+        ).catch(e => console.error(`Error sending batch to ${userId}:`, e.message));
+      }
     }
   }
 
