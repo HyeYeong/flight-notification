@@ -206,8 +206,26 @@ async function checkFlight() {
   const lineTokenGlobal = process.env.LINE_CHANNEL_ACCESS_TOKEN;
   if (enableLineMessageGlobal && lineTokenGlobal) {
     for (const [userId, msgs] of Object.entries(userMessages)) {
-      for (let i = 0; i < msgs.length; i += 5) {
-        const chunk = msgs.slice(i, i + 5);
+      let currentText = "";
+      let finalMessages = [];
+
+      for (const msg of msgs) {
+        if (currentText.length + msg.text.length + 20 > 4000) {
+          finalMessages.push({ type: "text", text: currentText });
+          currentText = msg.text;
+        } else {
+          if (currentText.length > 0) {
+            currentText += "\n\n────────────────\n\n";
+          }
+          currentText += msg.text;
+        }
+      }
+      if (currentText.length > 0) {
+        finalMessages.push({ type: "text", text: currentText });
+      }
+
+      for (let i = 0; i < finalMessages.length; i += 5) {
+        const chunk = finalMessages.slice(i, i + 5);
         try {
           await axios.post(
             "https://api.line.me/v2/bot/message/push",
