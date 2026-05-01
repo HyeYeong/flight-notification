@@ -80,6 +80,8 @@ async function checkFlight() {
   console.log(`📌 Found ${activeAlerts.length} active flight alerts in DB.`);
 
   const userMessages = {};
+  const enableLineMessage = process.env.ENABLE_LINE_MESSAGE === "true";
+  const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 
   for (const alert of activeAlerts) {
     const user = await UserState.findOne({ lineUserId: alert.lineUserId });
@@ -135,6 +137,12 @@ async function checkFlight() {
 
       if (allFlights.length === 0) {
         console.log(`🤔 [${alert.departure_id}->${alert.arrival_id}] No matching flight data found within time range.`);
+        if (enableLineMessage && lineToken) {
+          const nowTime = new Date().toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' });
+          const notFoundMsg = t(lang, 'flight_alert_not_found', { time: nowTime, dep: alert.departure_id, arr: alert.arrival_id, date: alert.outbound_date });
+          userMessages[alert.lineUserId] = userMessages[alert.lineUserId] || [];
+          userMessages[alert.lineUserId].push({ type: "text", text: notFoundMsg });
+        }
         continue;
       }
 
@@ -148,9 +156,6 @@ async function checkFlight() {
       if (cheapestPrice <= alert.target_price) {
         // 목표가 달성!
         console.log(`🚨 Target price reached! Sending LINE message to ${alert.lineUserId}...`);
-
-        const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
-        const enableLineMessage = process.env.ENABLE_LINE_MESSAGE === "true";
 
         const flightsInfoText = topFlights.map((flight, index) => {
           let flightStr = `${index + 1}. 💰 ${flight.price.toLocaleString()} ${currency}\n`;
@@ -196,15 +201,33 @@ async function checkFlight() {
         userMessages[alert.lineUserId].push({ type: "text", text: messageText });
       } else {
         console.log(`⏰ Price is still higher than target.`);
+        if (enableLineMessage && lineToken) {
+          const nowTime = new Date().toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' });
+          const notMetMsg = t(lang, 'flight_alert_not_met', {
+            time: nowTime,
+            dep: alert.departure_id,
+            arr: alert.arrival_id,
+            targetPrice: alert.target_price.toLocaleString(),
+            cheapestPrice: cheapestPrice.toLocaleString(),
+            currency: currency,
+            date: alert.outbound_date
+          });
+          userMessages[alert.lineUserId] = userMessages[alert.lineUserId] || [];
+          userMessages[alert.lineUserId].push({ type: "text", text: notMetMsg });
+        }
       }
     } catch (error) {
       console.error(`❌ Error fetching flight data for alert ${alert._id}:`, error.message);
+      
+      if (enableLineMessage && lineToken) {
+        const errorMsg = t(lang, 'flight_alert_error', { dep: alert.departure_id, arr: alert.arrival_id, date: alert.outbound_date, error: error.message });
+        userMessages[alert.lineUserId] = userMessages[alert.lineUserId] || [];
+        userMessages[alert.lineUserId].push({ type: "text", text: errorMsg });
+      }
     }
   }
 
-  const enableLineMessageGlobal = process.env.ENABLE_LINE_MESSAGE === "true";
-  const lineTokenGlobal = process.env.LINE_CHANNEL_ACCESS_TOKEN;
-  if (enableLineMessageGlobal && lineTokenGlobal) {
+  if (enableLineMessage && lineToken) {
     for (const [userId, msgs] of Object.entries(userMessages)) {
       let currentText = "";
       let finalMessages = [];
@@ -230,7 +253,7 @@ async function checkFlight() {
           await axios.post(
             "https://api.line.me/v2/bot/message/push",
             { to: userId, messages: chunk },
-            { headers: { "Content-Type": "application/json", Authorization: `Bearer ${lineTokenGlobal}` } }
+            { headers: { "Content-Type": "application/json", Authorization: `Bearer ${lineToken}` } }
           );
           console.log(`✅ LINE batch message sent successfully to ${userId.substring(0, 6)}!`);
         } catch (lineError) {

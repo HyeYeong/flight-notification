@@ -77,6 +77,9 @@ export default async function handler(req, res) {
   // 유저별 라인 메시지 누적
   const userMessages = {};
 
+  const enableLineMessage = process.env.ENABLE_LINE_MESSAGE === "true";
+  const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+
   for (const alert of activeAlerts) {
     const user = await UserState.findOne({ lineUserId: alert.lineUserId });
     const lang = (user && user.language) ? user.language : "ko";
@@ -114,8 +117,6 @@ export default async function handler(req, res) {
       });
 
       const nowTime = new Date().toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit' });
-      const enableLineMessage = process.env.ENABLE_LINE_MESSAGE === "true";
-      const lineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 
       if (allFlights.length === 0) {
         reportLines.push(`⚠️ [${alert.departure_id}→${alert.arrival_id}] 검색 결과 없음 (시간 조건 초과)`);
@@ -188,13 +189,17 @@ export default async function handler(req, res) {
     } catch (e) {
       console.error(`❌ Error fetching flights for ${alert._id}`, e.message);
       reportLines.push(`❌ [${alert.departure_id}→${alert.arrival_id}] 검색 오류: ${e.message}`);
+      
+      if (enableLineMessage && lineToken) {
+        const errorMsg = t(lang, 'flight_alert_error', { dep: alert.departure_id, arr: alert.arrival_id, date: alert.outbound_date, error: e.message });
+        userMessages[alert.lineUserId] = userMessages[alert.lineUserId] || [];
+        userMessages[alert.lineUserId].push({ type: "text", text: errorMsg });
+      }
     }
   }
 
   // 사용자들에게 누적된 메시지 일괄 발송 (API 리밋 및 데이터 유실 방지)
-  const isEnabled = process.env.ENABLE_LINE_MESSAGE === "true";
-  const globalLineToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
-  if (isEnabled && globalLineToken) {
+  if (enableLineMessage && lineToken) {
     for (const [userId, msgs] of Object.entries(userMessages)) {
       let currentText = "";
       let finalMessages = [];
@@ -219,7 +224,7 @@ export default async function handler(req, res) {
         await axios.post(
           "https://api.line.me/v2/bot/message/push",
           { to: userId, messages: chunk },
-          { headers: { "Content-Type": "application/json", Authorization: `Bearer ${globalLineToken}` } }
+          { headers: { "Content-Type": "application/json", Authorization: `Bearer ${lineToken}` } }
         ).catch(e => console.error(`Error sending batch to ${userId}:`, e.message));
       }
     }
