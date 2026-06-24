@@ -104,6 +104,10 @@ export default async function handler(req, res) {
       api_key: apiKey
     };
 
+    if (alert.flight_type === 1 && retParsed && retParsed.date) {
+      params.return_date = retParsed.date;
+    }
+
     try {
       const response = await axios.get("https://serpapi.com/search.json", { params });
       let allFlights = [...(response.data.best_flights || []), ...(response.data.other_flights || [])];
