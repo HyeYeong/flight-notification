@@ -162,11 +162,27 @@ async function checkFlight() {
           let outTime = flight.flights[0].departure_airport.time;
           let outAirline = flight.flights[0].airline;
 
-          if (flight.flights.length > 1) {
-            flightStr += `   🛫 ${outTime} (${outAirline}) 외 ${flight.flights.length - 1}회 경유`;
-          } else {
-            flightStr += `   🛫 ${outTime} (${outAirline})`;
+          // 수하물 정보 추출
+          let baggageInfo = lang === 'ko' ? '포함' : '含む';
+          if (flight.extensions) {
+            const bagExt = flight.extensions.find(ext => ext.toLowerCase().includes("bag"));
+            if (bagExt) {
+              if (bagExt.toLowerCase().includes("fee") || bagExt.toLowerCase().includes("paid")) {
+                baggageInfo = lang === 'ko' ? '미포함 (유료)' : '含まない (有料)';
+              } else if (bagExt.toLowerCase().includes("included")) {
+                baggageInfo = lang === 'ko' ? '포함' : '含む';
+              } else {
+                baggageInfo = bagExt;
+              }
+            }
           }
+
+          if (flight.flights.length > 1) {
+            flightStr += `   🛫 ${outTime} (${outAirline}) 외 ${flight.flights.length - 1}회 경유\n`;
+          } else {
+            flightStr += `   🛫 ${outTime} (${outAirline})\n`;
+          }
+          flightStr += `   🧳 ${lang === 'ko' ? '위탁수하물' : '受託手荷物'}: ${baggageInfo}`;
           return flightStr;
         }).join("\n\n");
 

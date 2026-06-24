@@ -6,7 +6,8 @@ import axios from "axios";
 // 환경변수 모킹
 process.env.CRON_SECRET = "test_cron_secret";
 process.env.SERP_API_KEY = "test_serp_api_key";
-process.env.ENABLE_LINE_MESSAGE = "false";
+process.env.ENABLE_LINE_MESSAGE = "true";
+process.env.LINE_CHANNEL_ACCESS_TOKEN = "test_line_channel_access_token";
 process.env.MONGODB_URI = "mongodb://localhost:27017/test_db";
 
 // 몽고디비 연결 함수 Mocking (아무것도 하지 않음)
@@ -67,11 +68,13 @@ axios.get = async (url, config) => {
   if (url === "https://serpapi.com/search.json") {
     capturedParams.push(config.params);
     // Mock SerpApi Response
+    const isRound = config.params.type === 1;
     return {
       data: {
         best_flights: [
           {
-            price: config.params.type === 1 ? 250000 : 120000,
+            price: isRound ? 250000 : 120000,
+            extensions: isRound ? ["Checked bag included"] : ["Checked baggage for a fee"],
             flights: [
               {
                 departure_airport: { time: "2026-07-20 10:00" },
@@ -90,9 +93,13 @@ axios.get = async (url, config) => {
   throw new Error(`Unexpected GET request to ${url}`);
 };
 
+const capturedPostData = [];
 axios.post = async (url, data, config) => {
-  // Line push message mock
-  return { data: { success: true } };
+  if (url === "https://api.line.me/v2/bot/message/push") {
+    capturedPostData.push({ to: data.to, messages: data.messages });
+    return { data: { success: true } };
+  }
+  throw new Error(`Unexpected POST request to ${url}`);
 };
 
 // Vercel Cron Handler 불러오기
@@ -147,6 +154,21 @@ test("Vercel Cron Handler - 왕복 항공권 시 return_date 파라미터가 포
   assert.strictEqual(oneWayParams.outbound_date, "2026-07-20");
   assert.strictEqual(oneWayParams.return_date, undefined); // 편도에는 return_date가 없어야 함
   assert.strictEqual(oneWayParams.type, 2);
+
+  // 3. 라인 메시지 전송 및 수하물 문구 검증
+  assert.strictEqual(capturedPostData.length, 2);
+
+  // user_1 (왕복) 메시지 검증: 수하물 포함되어 있어야 함
+  const msgUser1 = capturedPostData.find(x => x.to === "user_1");
+  assert.ok(msgUser1);
+  const textUser1 = msgUser1.messages[0].text;
+  assert.ok(textUser1.includes("위탁수하물: 포함"));
+
+  // user_2 (편도) 메시지 검증: 수하물 미포함(유료) 이어야 함
+  const msgUser2 = capturedPostData.find(x => x.to === "user_2");
+  assert.ok(msgUser2);
+  const textUser2 = msgUser2.messages[0].text;
+  assert.ok(textUser2.includes("위탁수하물: 미포함 (유료)"));
 
   console.log("🎉 모든 검증 테스트 케이스가 성공적으로 통과되었습니다!");
 });
