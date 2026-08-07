@@ -10,11 +10,11 @@ process.env.ENABLE_LINE_MESSAGE = "true";
 process.env.LINE_CHANNEL_ACCESS_TOKEN = "test_line_channel_access_token";
 process.env.MONGODB_URI = "mongodb://localhost:27017/test_db";
 
-// 몽고디비 연결 함수 Mocking (아무것도 하지 않음)
+// mongo DB 연결 함수 Mocking (아무것도 하지 않음)
 import { connectDB } from "../models/db.js";
 mongoose.connect = async () => {
   return {
-    connections: [{ readyState: 1 }]
+    connections: [{ readyState: 1 }],
   };
 };
 
@@ -33,7 +33,7 @@ const mockAlerts = [
     return_date: "2026-07-27",
     flight_type: 1, // 왕복
     target_price: 300000,
-    isActive: true
+    isActive: true,
   },
   {
     _id: "alert_one_way",
@@ -43,13 +43,13 @@ const mockAlerts = [
     outbound_date: "2026-07-20",
     flight_type: 2, // 편도
     target_price: 150000,
-    isActive: true
-  }
+    isActive: true,
+  },
 ];
 
 const mockUsers = {
   user_1: { lineUserId: "user_1", language: "ko", currency: "KRW" },
-  user_2: { lineUserId: "user_2", language: "ko", currency: "KRW" }
+  user_2: { lineUserId: "user_2", language: "ko", currency: "KRW" },
 };
 
 // DB 조회 모킹
@@ -74,20 +74,22 @@ axios.get = async (url, config) => {
         best_flights: [
           {
             price: isRound ? 250000 : 120000,
-            extensions: isRound ? ["Checked bag included"] : ["Checked baggage for a fee"],
+            extensions: isRound
+              ? ["Checked bag included"]
+              : ["Checked baggage for a fee"],
             flights: [
               {
                 departure_airport: { time: "2026-07-20 10:00" },
-                airline: "Korean Air"
-              }
-            ]
-          }
+                airline: "Korean Air",
+              },
+            ],
+          },
         ],
         other_flights: [],
         search_metadata: {
-          google_flights_url: "https://google.com/flights/test"
-        }
-      }
+          google_flights_url: "https://google.com/flights/test",
+        },
+      },
     };
   }
   throw new Error(`Unexpected GET request to ${url}`);
@@ -108,9 +110,9 @@ import handler from "../api/cron.js";
 test("Vercel Cron Handler - 왕복 항공권 시 return_date 파라미터가 포함되는지 검증", async () => {
   const req = {
     headers: {
-      authorization: "Bearer test_cron_secret"
+      authorization: "Bearer test_cron_secret",
     },
-    query: {}
+    query: {},
   };
 
   let statusResult = null;
@@ -125,9 +127,9 @@ test("Vercel Cron Handler - 왕복 항공권 시 return_date 파라미터가 포
         },
         end: (msg) => {
           jsonResult = msg;
-        }
+        },
       };
-    }
+    },
   };
 
   await handler(req, res);
@@ -159,13 +161,13 @@ test("Vercel Cron Handler - 왕복 항공권 시 return_date 파라미터가 포
   assert.strictEqual(capturedPostData.length, 2);
 
   // user_1 (왕복) 메시지 검증: 수하물 포함되어 있어야 함
-  const msgUser1 = capturedPostData.find(x => x.to === "user_1");
+  const msgUser1 = capturedPostData.find((x) => x.to === "user_1");
   assert.ok(msgUser1);
   const textUser1 = msgUser1.messages[0].text;
   assert.ok(textUser1.includes("위탁수하물: 포함"));
 
   // user_2 (편도) 메시지 검증: 수하물 미포함(유료) 이어야 함
-  const msgUser2 = capturedPostData.find(x => x.to === "user_2");
+  const msgUser2 = capturedPostData.find((x) => x.to === "user_2");
   assert.ok(msgUser2);
   const textUser2 = msgUser2.messages[0].text;
   assert.ok(textUser2.includes("위탁수하물: 미포함 (유료)"));
